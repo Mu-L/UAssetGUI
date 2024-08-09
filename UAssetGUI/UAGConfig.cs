@@ -84,13 +84,19 @@ namespace UAssetGUI
             return res;
         }
 
-        public static void StageFile(string rawPathOnDisk, string CurrentContainerPath)
+        public static void StageFile(string rawPathOnDisk, string CurrentContainerPath, string newPath = null)
         {
-            var finalPath = DifferentStagingPerPak ? Path.Combine(StagingFolder, Path.GetFileNameWithoutExtension(CurrentContainerPath), Path.GetFileName(rawPathOnDisk)) : Path.Combine(StagingFolder, Path.GetFileName(rawPathOnDisk));
-            Directory.CreateDirectory(Path.GetDirectoryName(finalPath));
+            if (newPath == null) newPath = Path.GetFileName(rawPathOnDisk);
+            newPath = newPath.Replace('/', Path.DirectorySeparatorChar);
+
+            var finalPath = DifferentStagingPerPak ? Path.Combine(StagingFolder, Path.GetFileNameWithoutExtension(CurrentContainerPath), newPath) : Path.Combine(StagingFolder, newPath);
+            try { Directory.CreateDirectory(Path.GetDirectoryName(finalPath)); } catch { return; } // fail silently if cant make the directory we need
+
+            try { Directory.Delete(finalPath, true); } catch { } // if we turn a directory into a file, try and get rid of the directory
 
             File.Copy(rawPathOnDisk, finalPath, true);
             try { File.Copy(Path.ChangeExtension(rawPathOnDisk, ".uexp"), Path.ChangeExtension(finalPath, ".uexp"), true); } catch { }
+            try { File.Copy(Path.ChangeExtension(rawPathOnDisk, ".ubulk"), Path.ChangeExtension(finalPath, ".ubulk"), true); } catch { }
         }
 
         public static void StageFile(DirectoryTreeItem item, string newPath = null)
@@ -103,15 +109,21 @@ namespace UAssetGUI
             }
 
             if (newPath == null) newPath = item.FullPath;
+            newPath = newPath.Replace('/', Path.DirectorySeparatorChar);
+
             string outputPath = item.SaveFileToTemp();
-            var finalPath = DifferentStagingPerPak ? Path.Combine(StagingFolder, Path.GetFileNameWithoutExtension(item.ParentForm.CurrentContainerPath), newPath.Replace('/', Path.DirectorySeparatorChar)) : Path.Combine(StagingFolder, newPath.Replace('/', Path.DirectorySeparatorChar));
+            var finalPath = DifferentStagingPerPak ? Path.Combine(StagingFolder, Path.GetFileNameWithoutExtension(item.ParentForm.CurrentContainerPath), newPath) : Path.Combine(StagingFolder, newPath);
             if (outputPath == null || finalPath == null) return;
-            Directory.CreateDirectory(Path.GetDirectoryName(finalPath));
-            
+            try { Directory.CreateDirectory(Path.GetDirectoryName(finalPath)); } catch { return; } // fail silently if cant make the directory we need
+
+            try { Directory.Delete(finalPath, true); } catch { } // if we turn a directory into a file, try and get rid of the directory
+
             File.Copy(outputPath, finalPath, true);
             try { File.Copy(Path.ChangeExtension(outputPath, ".uexp"), Path.ChangeExtension(finalPath, ".uexp"), true); } catch { }
+            try { File.Copy(Path.ChangeExtension(outputPath, ".ubulk"), Path.ChangeExtension(finalPath, ".ubulk"), true); } catch { }
             try { File.Delete(outputPath); } catch { }
             try { File.Delete(Path.ChangeExtension(outputPath, ".uexp")); } catch { }
+            try { File.Delete(Path.ChangeExtension(outputPath, ".ubulk")); } catch { }
         }
 
         public static string ExtractFile(DirectoryTreeItem item)
@@ -126,12 +138,16 @@ namespace UAssetGUI
             }
 
             string outputPath = item.SaveFileToTemp();
-            Directory.CreateDirectory(Path.GetDirectoryName(finalPath));
+            try { Directory.CreateDirectory(Path.GetDirectoryName(finalPath)); } catch { return null; } // fail silently if cant make the directory we need
+
+            try { Directory.Delete(finalPath, true); } catch { } // if we turn a directory into a file, try and get rid of the directory
 
             File.Copy(outputPath, finalPath, true);
             try { File.Copy(Path.ChangeExtension(outputPath, ".uexp"), Path.ChangeExtension(finalPath, ".uexp"), true); } catch { }
+            try { File.Copy(Path.ChangeExtension(outputPath, ".ubulk"), Path.ChangeExtension(finalPath, ".ubulk"), true); } catch { }
             try { File.Delete(outputPath); } catch { }
             try { File.Delete(Path.ChangeExtension(outputPath, ".uexp")); } catch { }
+            try { File.Delete(Path.ChangeExtension(outputPath, ".ubulk")); } catch { }
 
             return finalPath;
         }
