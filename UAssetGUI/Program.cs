@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
+using System.Security.Cryptography;
 using System.Windows.Forms;
 using UAssetAPI;
 using UAssetAPI.UnrealTypes;
@@ -24,6 +26,32 @@ namespace UAssetGUI
             {
                 if (stream == null) return null;
 
+                // compare hash of new compressed data to hash of compressed data already on disk (saved as .sha256 file)
+                // this avoids unnecessary disk writes and improves load time
+                byte[] newStreamHash = Array.Empty<byte>();
+                using (SHA256 hash = SHA256.Create())
+                {
+                    newStreamHash = hash.ComputeHash(stream);
+                    stream.Seek(0, SeekOrigin.Begin);
+                }
+
+                byte[] currentStreamHash = Array.Empty<byte>();
+                string streamHashPath = Path.ChangeExtension(outPath, Path.GetExtension(outPath) + ".sha256");
+                try
+                {
+                    if (File.Exists(streamHashPath)) currentStreamHash = File.ReadAllBytes(streamHashPath);
+                }
+                catch
+                {
+                    currentStreamHash = Array.Empty<byte>();
+                }
+
+                if (currentStreamHash.Length > 0 && newStreamHash.Length > 0 && currentStreamHash.SequenceEqual(newStreamHash))
+                {
+                    // hashes are equal, OK to skip decompress/write routine
+                    return outPath;
+                }
+
                 try
                 {
                     using (FileStream newFileStream = File.Open(outPath, FileMode.Create, FileAccess.Write))
@@ -33,6 +61,9 @@ namespace UAssetGUI
                             gzipStream.CopyTo(newFileStream);
                         }
                     }
+
+                    // write new hash
+                    File.WriteAllBytes(streamHashPath, newStreamHash);
 
                     return outPath;
                 }
