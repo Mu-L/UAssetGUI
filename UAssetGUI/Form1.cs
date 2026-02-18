@@ -541,14 +541,29 @@ namespace UAssetGUI
                 switch (fileExtension)
                 {
                     case ".json":
-                        savingPath = Path.ChangeExtension(filePath, "uasset");
-                        using (var sr = new FileStream(filePath, FileMode.Open))
+                        try
                         {
-                            targetAsset = UAsset.DeserializeJson(sr);
+                            savingPath = Path.ChangeExtension(filePath, "uasset");
+                            using (var sr = new FileStream(filePath, FileMode.Open))
+                            {
+                                targetAsset = UAsset.DeserializeJson(sr);
+                            }
+                            targetAsset.Mappings = ParsingMappings;
+                            targetAsset.FilePath = filePath;
+                            desiredSetUnsavedChanges = true;
                         }
-                        targetAsset.Mappings = ParsingMappings;
-                        targetAsset.FilePath = filePath;
-                        desiredSetUnsavedChanges = true;
+                        catch (JsonSerializationException ex)
+                        {
+                            if (ex?.Message != null && ex.Message.Contains("Cannot deserialize the current JSON array")) // OK because Newtonsoft.Json does not translate exceptions
+                            {
+                                UAGUtils.InvokeUI(() => { MessageBox.Show("Failed to open this file! This file is likely an FModel/CUE4Parse JSON file, which cannot be directly loaded into UAssetGUI.\n\nPlease export assets to JSON using UAssetGUI (File -> Save As), or look into other tools such as JsonAsAsset (https://github.com/JsonAsAsset/JsonAsAsset) for interpreting CUE4Parse JSON.", "Uh oh!"); });
+                                return;
+                            }
+                            else
+                            {
+                                throw;
+                            }
+                        }
                         break;
                     case ".pak":
                     case ".utoc":
