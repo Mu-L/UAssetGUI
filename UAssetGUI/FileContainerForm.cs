@@ -427,9 +427,13 @@ namespace UAssetGUI
             {
                 retocAvailable = SendCommandToRetoc($"{RetocExtraCommands} --version", out outputText, out errorText) && outputText.Contains("retoc_cli");
             }
-            catch
+            catch (Exception ex)
             {
-                retocAvailable = false;
+                UAGUtils.InvokeUI(() =>
+                {
+                    MessageBox.Show("Failed to launch retoc:\n\n" + ex.Message + "\n" + ex.StackTrace, "Uh oh!");
+                });
+                return;
             }
 
             if (!retocAvailable)
