@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Reflection;
 using System.Text;
 using System.Windows.Forms;
@@ -163,6 +164,49 @@ namespace UAssetGUI
         {
             if (val == FString.NullCase) return null;
             return FString.FromString(val.Replace("\\n", "\n").Replace("\\r", "\r"), encodingHeaderName.Equals(Encoding.Unicode.HeaderName) ? Encoding.Unicode : Encoding.UTF8);
+        }
+
+        public static bool DeleteDirectoryQuick(string path, bool recursive)
+        {
+            try
+            {
+                if (!Directory.Exists(path)) return false;
+                Directory.Delete(path, recursive);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public static bool DeleteFileQuick(string path)
+        {
+            try
+            {
+                if (!File.Exists(path)) return false;
+                File.Delete(path);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public static bool MoveFileQuick(string source, string dest, bool overwrite)
+        {
+            try
+            {
+                if (!File.Exists(source)) return false;
+                if (!overwrite && File.Exists(dest)) return false;
+                File.Move(source, dest, overwrite);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public static void OpenURL(string url)

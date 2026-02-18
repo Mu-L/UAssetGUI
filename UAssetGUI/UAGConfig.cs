@@ -65,6 +65,7 @@ namespace UAssetGUI
         public readonly static string StagingFolder = Path.Combine(ConfigFolder, "Staging");
         public readonly static string ExtractedFolder = Path.Combine(ConfigFolder, "Extracted");
         public readonly static string ScriptsFolder = Path.Combine(ConfigFolder, "Scripts");
+        public readonly static string TempFolder = Path.Combine(Path.GetTempPath(), "UAssetGUI");
 
         internal static bool DifferentStagingPerPak = false;
 
@@ -110,7 +111,7 @@ namespace UAssetGUI
             var finalPath = DifferentStagingPerPak ? Path.Combine(StagingFolder, Path.GetFileNameWithoutExtension(CurrentContainerPath), newPath) : Path.Combine(StagingFolder, newPath);
             try { Directory.CreateDirectory(Path.GetDirectoryName(finalPath)); } catch { return; } // fail silently if cant make the directory we need
 
-            try { Directory.Delete(finalPath, true); } catch { } // if we turn a directory into a file, try and get rid of the directory
+            UAGUtils.DeleteDirectoryQuick(finalPath, true);
 
             File.Copy(rawPathOnDisk, finalPath, true);
             try { File.Copy(Path.ChangeExtension(rawPathOnDisk, ".uexp"), Path.ChangeExtension(finalPath, ".uexp"), true); } catch { }
@@ -134,14 +135,14 @@ namespace UAssetGUI
             if (outputPath == null || finalPath == null) return;
             try { Directory.CreateDirectory(Path.GetDirectoryName(finalPath)); } catch { return; } // fail silently if cant make the directory we need
 
-            try { Directory.Delete(finalPath, true); } catch { } // if we turn a directory into a file, try and get rid of the directory
+            UAGUtils.DeleteDirectoryQuick(finalPath, true); // if we turn a directory into a file, try and get rid of the directory
 
             File.Copy(outputPath, finalPath, true);
             try { File.Copy(Path.ChangeExtension(outputPath, ".uexp"), Path.ChangeExtension(finalPath, ".uexp"), true); } catch { }
             try { File.Copy(Path.ChangeExtension(outputPath, ".ubulk"), Path.ChangeExtension(finalPath, ".ubulk"), true); } catch { }
-            try { File.Delete(outputPath); } catch { }
-            try { File.Delete(Path.ChangeExtension(outputPath, ".uexp")); } catch { }
-            try { File.Delete(Path.ChangeExtension(outputPath, ".ubulk")); } catch { }
+            UAGUtils.DeleteFileQuick(outputPath);
+            UAGUtils.DeleteFileQuick(Path.ChangeExtension(outputPath, ".uexp"));
+            UAGUtils.DeleteFileQuick(Path.ChangeExtension(outputPath, ".ubulk"));
         }
 
         public static string ExtractFile(DirectoryTreeItem item, InteropType interopType, FileStream stream2 = null, PakReader reader2 = null)

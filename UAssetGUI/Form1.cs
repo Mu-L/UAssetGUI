@@ -1647,17 +1647,8 @@ namespace UAssetGUI
 
             if (!e.Cancel) DisposeDiscordRpc();
 
-            // delete temp folders
-            try
-            {
-                Directory.Delete(Path.Combine(Path.GetTempPath(), "UAG_read_only"), true);
-            }
-            catch { }
-            try
-            {
-                Directory.Delete(Path.Combine(Path.GetTempPath(), "UAG_retoc"), true);
-            }
-            catch { }
+            // delete temp folder
+            UAGUtils.DeleteDirectoryQuick(UAGConfig.TempFolder, true);
         }
 
         private void frm_DragEnter(object sender, DragEventArgs e)

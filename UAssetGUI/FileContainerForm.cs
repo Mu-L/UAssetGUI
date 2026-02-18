@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using UAssetAPI;
@@ -118,6 +119,16 @@ namespace UAssetGUI
             }
 
             RetocAvailable = SendCommandToRetoc("--version", out string outputText, out _) && outputText.Contains("retoc_cli");
+
+            // extract repak_bind.dll if available
+            string libsPath = Path.Combine(UAGConfig.ConfigFolder, "Libraries");
+            string repakBindPath = Path.Combine(libsPath, "repak_bind.dll");
+            if (!HasAlreadyExtractedRepak || !File.Exists(repakBindPath))
+            {
+                HasAlreadyExtractedRepak = true;
+                Program.ExtractCompressedResource("UAssetAPI.repak_bind.dll.gz", repakBindPath, typeof(UAsset).Assembly);
+                if (File.Exists(repakBindPath)) NativeLibrary.Load(repakBindPath);
+            }
 
             LoadContainer(CurrentContainerPath);
             RefreshTreeView(saveTreeView);
@@ -305,6 +316,9 @@ namespace UAssetGUI
             }
         }
 
+        public static readonly string ReadOnlyTempPath = Path.Combine(UAGConfig.TempFolder, "UAG_read_only");
+        public static readonly string RetocTempPath = Path.Combine(UAGConfig.TempFolder, "UAG_retoc");
+
         public void LoadContainerUtoc(string path)
         {
             if (path == null) return;
@@ -315,12 +329,15 @@ namespace UAssetGUI
                 InteropType = InteropType.Retoc;
                 Version = PakVersion.V11;
                 MountPoint = "../../../"; // retoc always uses this mount point
-                string libsPath = Path.Combine(UAGConfig.ConfigFolder, "Libraries");
 
                 // extract file manifest
-                string expectedManifestPath = Path.Combine(libsPath, "pakstore.json");
-                try { File.Delete(expectedManifestPath); } catch { }
-                bool extractedManifest = SendCommandToRetoc($"manifest \"{Path.GetDirectoryName(path)}\"", out _, out _);
+                string tempPathForPakstore = Path.Combine(RetocTempPath, $"pakstore_{Path.GetRandomFileName()}");
+                Directory.CreateDirectory(RetocTempPath);
+                Directory.CreateDirectory(tempPathForPakstore);
+
+                string expectedManifestPath = Path.Combine(tempPathForPakstore, "pakstore.json");
+                UAGUtils.DeleteFileQuick(expectedManifestPath);
+                bool extractedManifest = SendCommandToRetoc($"manifest \"{Path.GetDirectoryName(path)}\"", out _, out _, false, tempPathForPakstore);
                 RetocManifest manifestData = JsonConvert.DeserializeObject<RetocManifest>(File.ReadAllText(expectedManifestPath));
 
                 if (manifestData.OpLog.Entries == null) throw new InvalidOperationException("Failed to extract manifest");
@@ -407,7 +424,7 @@ namespace UAssetGUI
             return true;
         }
 
-        public static bool SendCommandToRetoc(string args, out string outputText, out string errorText, bool displayConsole = false)
+        public static bool SendCommandToRetoc(string args, out string outputText, out string errorText, bool displayConsole = false, string workingDirectory = null)
         {
             outputText = null;
             errorText = null;
@@ -417,12 +434,12 @@ namespace UAssetGUI
             Directory.CreateDirectory(UAGConfig.ConfigFolder);
             Directory.CreateDirectory(libsPath);
 
-            if (!HasAlreadyExtractedRetoc) ExtractRetoc();
+            if (!HasAlreadyExtractedRetoc || !File.Exists(retocPath)) ExtractRetoc();
 
             Process process = new Process();
             process.StartInfo.FileName = retocPath;
             process.StartInfo.Arguments = args;
-            process.StartInfo.WorkingDirectory = libsPath;
+            process.StartInfo.WorkingDirectory = workingDirectory ?? libsPath;
             process.StartInfo.UseShellExecute = displayConsole ? true : false;
             process.StartInfo.RedirectStandardOutput = displayConsole ? false : true;
             process.StartInfo.RedirectStandardError = displayConsole ? false : true;
@@ -440,6 +457,7 @@ namespace UAssetGUI
         }
 
         private static bool HasAlreadyExtractedRetoc = false;
+        private static bool HasAlreadyExtractedRepak = false;
         public static string ExtractRetoc()
         {
             HasAlreadyExtractedRetoc = true;
@@ -1025,7 +1043,7 @@ namespace UAssetGUI
 
         public string SaveFileToTemp(InteropType interopType, string outputPathDirectory = null, FileStream stream2 = null, PakReader reader2 = null)
         {
-            outputPathDirectory = outputPathDirectory ?? Path.Combine(Path.GetTempPath(), "UAG_read_only", Path.GetFileNameWithoutExtension(ParentForm.CurrentContainerPath));
+            outputPathDirectory = outputPathDirectory ?? Path.Combine(FileContainerForm.ReadOnlyTempPath, Path.GetFileNameWithoutExtension(ParentForm.CurrentContainerPath));
             
             string outputPath1 = Path.Combine(outputPathDirectory, FullPath.Replace('/', Path.DirectorySeparatorChar));
             string outputPath2 = Path.Combine(outputPathDirectory, Path.ChangeExtension(FullPath, ".uexp").Replace('/', Path.DirectorySeparatorChar));
@@ -1053,7 +1071,7 @@ namespace UAssetGUI
                                 byte[] res = reader.Get(stream, FullPath.Substring(Prefix?.Length ?? 0));
                                 if (res != null)
                                 {
-                                    if (File.Exists(outputPath1)) { try { File.Delete(outputPath1); } catch { } }
+                                    UAGUtils.DeleteFileQuick(outputPath1);
                                     File.WriteAllBytes(outputPath1, res);
                                 }
                                 else
@@ -1062,11 +1080,11 @@ namespace UAssetGUI
                                 }
 
                                 res = reader.Get(stream, Path.ChangeExtension(FullPath.Substring(Prefix?.Length ?? 0), ".uexp"));
-                                if (File.Exists(outputPath2)) { try { File.Delete(outputPath2); } catch { } }
+                                UAGUtils.DeleteFileQuick(outputPath2);
                                 if (res != null) File.WriteAllBytes(outputPath2, res);
 
                                 res = reader.Get(stream, Path.ChangeExtension(FullPath.Substring(Prefix?.Length ?? 0), ".ubulk"));
-                                if (File.Exists(outputPath3)) { try { File.Delete(outputPath3); } catch { } }
+                                UAGUtils.DeleteFileQuick(outputPath3);
                                 if (res != null) File.WriteAllBytes(outputPath3, res);
                             }
                         }
@@ -1091,15 +1109,15 @@ namespace UAssetGUI
                     break;
                 case InteropType.Retoc:
                     string targetPath = FullPath.Substring(Prefix?.Length ?? 0);
-                    string origPathPrefix = Path.Combine(Path.GetTempPath(), "UAG_retoc", "RetocFiles");
+                    string origPathPrefix = Path.Combine(FileContainerForm.RetocTempPath, "RetocFiles");
                     bool retocSuccess = FileContainerForm.SendCommandToRetoc($"to-legacy --filter \"{targetPath}\" \"{Path.GetDirectoryName(ParentForm.CurrentContainerPath)}\" \"{origPathPrefix}\"", out _, out _);
                     if (!retocSuccess) return null;
 
                     string origPath1 = Path.Combine(origPathPrefix, targetPath);
-                    try { File.Move(Path.ChangeExtension(origPath1, "uasset"), outputPath1, true); } catch { }
-                    try { File.Move(Path.ChangeExtension(origPath1, "umap"), outputPath1, true); } catch { }
-                    try { File.Move(Path.ChangeExtension(origPath1, "uexp"), outputPath2, true); } catch { }
-                    try { File.Move(Path.ChangeExtension(origPath1, "ubulk"), outputPath3, true); } catch { }
+                    UAGUtils.MoveFileQuick(Path.ChangeExtension(origPath1, "uasset"), outputPath1, true);
+                    UAGUtils.MoveFileQuick(Path.ChangeExtension(origPath1, "umap"), outputPath1, true);
+                    UAGUtils.MoveFileQuick(Path.ChangeExtension(origPath1, "uexp"), outputPath2, true);
+                    UAGUtils.MoveFileQuick(Path.ChangeExtension(origPath1, "ubulk"), outputPath3, true);
                     break;
             }
 
@@ -1176,9 +1194,9 @@ namespace UAssetGUI
 
             try
             {
-                File.Delete(FixedPathOnDisk);
-                try { File.Delete(Path.ChangeExtension(FixedPathOnDisk, ".uexp")); } catch { }
-                try { File.Delete(Path.ChangeExtension(FixedPathOnDisk, ".ubulk")); } catch { }
+                UAGUtils.DeleteFileQuick(FixedPathOnDisk);
+                UAGUtils.DeleteFileQuick(Path.ChangeExtension(FixedPathOnDisk, ".uexp"));
+                UAGUtils.DeleteFileQuick(Path.ChangeExtension(FixedPathOnDisk, ".ubulk"));
             }
             catch (UnauthorizedAccessException)
             {

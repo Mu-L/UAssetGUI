@@ -18,23 +18,30 @@ namespace UAssetGUI
         [DllImport("user32.dll")]
         private static extern bool SetProcessDPIAware();
 
-        internal static string ExtractCompressedResource(string resourceName, string outPath)
+        internal static string ExtractCompressedResource(string resourceName, string outPath, Assembly targetAsm = null)
         {
-            using (var stream = typeof(Program).Assembly.GetManifestResourceStream(resourceName))
+            using (var stream = (targetAsm ?? typeof(Program).Assembly).GetManifestResourceStream(resourceName))
             {
                 if (stream == null) return null;
 
-                using (FileStream newFileStream = File.Open(outPath, FileMode.Create, FileAccess.Write))
+                try
                 {
-                    using (var gzipStream = new GZipStream(stream, CompressionMode.Decompress))
+                    using (FileStream newFileStream = File.Open(outPath, FileMode.Create, FileAccess.Write))
                     {
-                        gzipStream.CopyTo(newFileStream);
+                        using (var gzipStream = new GZipStream(stream, CompressionMode.Decompress))
+                        {
+                            gzipStream.CopyTo(newFileStream);
+                        }
                     }
-                }
 
-                return outPath;
+                    return outPath;
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is DirectoryNotFoundException || ex is FileNotFoundException)
+                {
+                    // OK as long as the file exists, probably another instance of the software is already open
+                    return File.Exists(outPath) ? outPath : null;
+                }
             }
-            return null;
         }
 
         private static List<Type> strongRefs = new List<Type>();
@@ -50,7 +57,7 @@ namespace UAssetGUI
                     Directory.CreateDirectory(libsPath);
 
                     string outPath = ExtractCompressedResource("UAssetGUI." + assemblyName.Name + ".dll.gz", Path.Combine(libsPath, assemblyName.Name + ".dll"));
-                    if (outPath == null) return null; // if not found, default behavior
+                    if (outPath == null) return null; // if not found, fall back to default behavior
                     return Assembly.LoadFrom(outPath);
                 };
 
