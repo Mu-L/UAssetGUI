@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
@@ -74,10 +75,16 @@ namespace UAssetGUI
     {
         public IDictionary<TreeView, DirectoryTree> DirectoryTreeMap = new Dictionary<TreeView, DirectoryTree>();
         public string CurrentContainerPath;
+        public IDictionary<TreeView, bool> FlatViewEnabled = new Dictionary<TreeView, bool>();
+        public IDictionary<TreeView, string> Filter = new Dictionary<TreeView, string>();
         public PakVersion Version = PakVersion.V4;
         public InteropType InteropType = InteropType.Pak;
         public string MountPoint = "../../../";
-        public bool RetocAvailable = false;
+        public static string RetocExtraCommands
+        {
+            get { return UAGConfig.Data.RetocExtraCommands; }
+            set { UAGConfig.Data.RetocExtraCommands = value; UAGConfig.Save(); }
+        }
 
         public FileContainerForm()
         {
@@ -118,8 +125,6 @@ namespace UAssetGUI
                 };
             }
 
-            RetocAvailable = SendCommandToRetoc("--version", out string outputText, out _) && outputText.Contains("retoc_cli");
-
             // extract repak_bind.dll if available
             string libsPath = Path.Combine(UAGConfig.ConfigFolder, "Libraries");
             string repakBindPath = Path.Combine(libsPath, "repak_bind.dll");
@@ -141,15 +146,19 @@ namespace UAssetGUI
             return isDropDownOpened[item];
         }
 
-        public void AddDirectoryItemChildrenToTreeView(DirectoryTreeItem treeItem, PointingFileTreeNode dad, bool forceAddChildrenOfChildren = false)
+        public void AddDirectoryItemChildrenToTreeView(DirectoryTreeItem treeItem, PointingFileTreeNode dad, string filter, bool forceAddChildrenOfChildren = false, bool disableDynamicTree = false)
         {
-            dad.ChildrenInitialized = forceAddChildrenOfChildren || !UAGConfig.Data.EnableDynamicTree;
+            if (!UAGConfig.Data.EnableDynamicTree) disableDynamicTree = true;
+            dad.ChildrenInitialized = forceAddChildrenOfChildren || disableDynamicTree;
             foreach (KeyValuePair<string, DirectoryTreeItem> directoryItem in treeItem.Children)
             {
-                var newDad = new PointingFileTreeNode(directoryItem.Value.Name, directoryItem.Value);
-                newDad.ChildrenInitialized = false;
-                dad.Nodes.Add(newDad);
-                if (dad.ChildrenInitialized) AddDirectoryItemChildrenToTreeView(directoryItem.Value, newDad, false);
+                if (directoryItem.Value.Children.Count > 0 || string.IsNullOrEmpty(filter) || directoryItem.Value.FullPath.Contains(filter))
+                {
+                    var newDad = new PointingFileTreeNode(directoryItem.Value.Name, directoryItem.Value);
+                    newDad.ChildrenInitialized = false;
+                    dad.Nodes.Add(newDad);
+                    if (dad.ChildrenInitialized) AddDirectoryItemChildrenToTreeView(directoryItem.Value, newDad, filter, false, disableDynamicTree);
+                }
             }
         }
 
@@ -221,6 +230,40 @@ namespace UAssetGUI
 
         public void RefreshTreeView(TreeView treeView)
         {
+            if (!FlatViewEnabled.ContainsKey(treeView)) FlatViewEnabled[treeView] = false;
+            UAGUtils.InvokeUI(() => RefreshTreeViewInner(treeView, FlatViewEnabled[treeView]));
+        }
+
+        private int PruneChildren(PointingFileTreeNode branchNode)
+        {
+            if (branchNode?.Nodes == null) return 0;
+
+            int n = 0;
+            for (int nodeIdx = 0; nodeIdx < branchNode.Nodes.Count; nodeIdx++)
+            {
+                if (branchNode.Nodes[nodeIdx] != null && branchNode.Nodes[nodeIdx] is PointingFileTreeNode pftn)
+                {
+                    if (pftn.Pointer == null) continue;
+                    if (!pftn.Pointer.IsFile && pftn.Nodes.Count == 0)
+                    {
+                        // directories with no children need to be removed
+                        branchNode.Nodes.RemoveAt(nodeIdx);
+                        n++;
+                        nodeIdx--;
+                    }
+                    else
+                    {
+                        n += PruneChildren(pftn);
+                    }
+                }
+            }
+            return n;
+        }
+
+        private void RefreshTreeViewInner(TreeView treeView, bool flatView)
+        {
+            treeView.SuspendLayout();
+
             // get existing expanded nodes
             HashSet<string> FullPathsOfNodesToExpand = new HashSet<string>();
             ExpandedToHashSet(treeView.Nodes, FullPathsOfNodesToExpand);
@@ -232,19 +275,72 @@ namespace UAssetGUI
                 DirectoryTreeMap[treeView] = new DirectoryTree(this, stagingFiles, fixedPathsOnDisk);
             }
 
+            if (!Filter.ContainsKey(treeView)) Filter[treeView] = null;
+            string filter = Filter[treeView];
+            bool filterExists = !string.IsNullOrEmpty(filter);
+
             treeView.Nodes.Clear();
             DirectoryTree currentTree = DirectoryTreeMap[treeView];
-            if (currentTree?.RootNodes != null)
+            if (flatView && currentTree?.RootNodesFlat != null)
             {
-                foreach (KeyValuePair<string, DirectoryTreeItem> directoryItem in currentTree.RootNodes)
+                List<TreeNode> nodes = new List<TreeNode>();
+                foreach (KeyValuePair<string, DirectoryTreeItem> directoryItem in currentTree.RootNodesFlat.OrderBy(p => p.Value.FullPath))
                 {
-                    var dad = new PointingFileTreeNode(directoryItem.Value.Name, directoryItem.Value);
-                    treeView.Nodes.Add(dad);
-                    AddDirectoryItemChildrenToTreeView(directoryItem.Value, dad);
+                    // we can just filter here because in flat view nodes never have children
+                    if (string.IsNullOrEmpty(filter) || directoryItem.Value.FullPath.Contains(filter))
+                    {
+                        var dad = new PointingFileTreeNode(directoryItem.Value.FullPath, directoryItem.Value);
+                        nodes.Add(dad);
+                    }
                 }
+                treeView.Nodes.AddRange(nodes.ToArray());
             }
+            else
+            {
+                if (currentTree?.RootNodes != null)
+                {
+                    List<PointingFileTreeNode> nodes = new List<PointingFileTreeNode>();
+                    foreach (KeyValuePair<string, DirectoryTreeItem> directoryItem in currentTree.RootNodes)
+                    {
+                        var dad = new PointingFileTreeNode(directoryItem.Value.Name, directoryItem.Value);
+                        nodes.Add(dad);
+                        AddDirectoryItemChildrenToTreeView(directoryItem.Value, dad, filter, false, filterExists); // disable dynamic tree if filtering
+                    }
 
-            treeView.Sort();
+                    // filter has been applied to files, but we need to prune empty branches now
+                    if (filterExists)
+                    {
+                        for (int iter = 0; iter < 20; iter++) // max 20 iterations
+                        {
+                            int numPruned = 0;
+                            for (int nodeIdx = 0; nodeIdx < nodes.Count; nodeIdx++)
+                            {
+                                if (nodes[nodeIdx] != null && nodes[nodeIdx] is PointingFileTreeNode pftn)
+                                {
+                                    if (pftn.Pointer == null) continue;
+                                    if (!pftn.Pointer.IsFile && pftn.Nodes.Count == 0)
+                                    {
+                                        // directories with no children need to be removed
+                                        nodes.RemoveAt(nodeIdx);
+                                        numPruned++;
+                                        nodeIdx--;
+                                    }
+                                    else
+                                    {
+                                        numPruned += PruneChildren(pftn);
+                                    }
+                                }
+                            }
+
+                            if (numPruned == 0) break; // nothing else to prune
+                        }
+                    }
+
+                    treeView.Nodes.AddRange(nodes.ToArray());
+                }
+
+                treeView.Sort();
+            }
 
             HashSetToExpanded(treeView.Nodes, FullPathsOfNodesToExpand);
 
@@ -256,6 +352,8 @@ namespace UAssetGUI
             {
                 treeView.BackColor = UAGPalette.InactiveColor;
             }
+
+            treeView.ResumeLayout();
         }
 
         public void UnloadContainer()
@@ -322,7 +420,27 @@ namespace UAssetGUI
         public void LoadContainerUtoc(string path)
         {
             if (path == null) return;
-            if (!RetocAvailable) return;
+
+            bool retocAvailable = false;
+            string outputText = string.Empty; string errorText = string.Empty;
+            try
+            {
+                retocAvailable = SendCommandToRetoc($"{RetocExtraCommands} --version", out outputText, out errorText) && outputText.Contains("retoc_cli");
+            }
+            catch
+            {
+                retocAvailable = false;
+            }
+
+            if (!retocAvailable)
+            {
+                UAGUtils.InvokeUI(() =>
+                {
+                    MessageBox.Show("Failed to launch retoc:\n\n" + outputText + "\n" + errorText, "Uh oh!");
+                });
+                return;
+            }
+
             try
             {
                 CurrentContainerPath = path;
@@ -337,7 +455,7 @@ namespace UAssetGUI
 
                 string expectedManifestPath = Path.Combine(tempPathForPakstore, "pakstore.json");
                 UAGUtils.DeleteFileQuick(expectedManifestPath);
-                bool extractedManifest = SendCommandToRetoc($"manifest \"{Path.GetDirectoryName(path)}\"", out _, out _, false, tempPathForPakstore);
+                bool extractedManifest = FileContainerForm.SendCommandToRetoc($"{RetocExtraCommands} manifest \"{Path.GetDirectoryName(path)}\"", out _, out _, false, tempPathForPakstore);
                 RetocManifest manifestData = JsonConvert.DeserializeObject<RetocManifest>(File.ReadAllText(expectedManifestPath));
 
                 if (manifestData.OpLog.Entries == null) throw new InvalidOperationException("Failed to extract manifest");
@@ -417,7 +535,7 @@ namespace UAssetGUI
                     break;
                 case ".utoc":
                     string engVer = ((RetocEngineVersion)BaseForm.ParsingVersion).ToString();
-                    FileContainerForm.SendCommandToRetoc($"to-zen --version {engVer} \"{UAGConfig.GetStagingDirectory(path)}\" \"{path}\"", out _, out _);
+                    FileContainerForm.SendCommandToRetoc($"{RetocExtraCommands} to-zen --version {engVer} \"{UAGConfig.GetStagingDirectory(path)}\" \"{path}\"", out _, out _);
                     break;
             }
 
@@ -707,7 +825,8 @@ namespace UAssetGUI
                 {
                     TextPrompt replacementPrompt = new TextPrompt()
                     {
-                        DisplayText = "What path should this object be staged to?"
+                        DisplayText = "What path should this object be staged to?",
+                        Text = this.Text
                     };
 
                     replacementPrompt.StartPosition = FormStartPosition.CenterParent;
@@ -735,7 +854,8 @@ namespace UAssetGUI
             if (!ptn.ChildrenInitialized)
             {
                 ptn.Nodes.Clear();
-                AddDirectoryItemChildrenToTreeView(ptn.Pointer, ptn, true);
+                if (!Filter.ContainsKey(ptn.TreeView)) Filter[ptn.TreeView] = null;
+                AddDirectoryItemChildrenToTreeView(ptn.Pointer, ptn, Filter[ptn.TreeView], true);
             }
         }
 
@@ -825,7 +945,7 @@ namespace UAssetGUI
                     UAGUtils.OpenDirectory(UAGConfig.ExtractedFolder);
                     break;
                 case InteropType.Retoc:
-                    FileContainerForm.SendCommandToRetoc($"to-legacy \"{Path.GetDirectoryName(CurrentContainerPath)}\" \"{UAGConfig.ExtractedFolder}\"", out _, out _, true);
+                    FileContainerForm.SendCommandToRetoc($"{RetocExtraCommands} to-legacy \"{Path.GetDirectoryName(CurrentContainerPath)}\" \"{UAGConfig.ExtractedFolder}\"", out _, out _, true);
                     UAGUtils.OpenDirectory(UAGConfig.ExtractedFolder);
                     break;
             }
@@ -853,6 +973,66 @@ namespace UAssetGUI
                     MessageBox.Show(progressBarForm == null ? "Operation completed." : ("Extracted " + progressBarForm.Value + " files successfully."), "Notice");
                 }
                 progressBarForm?.Close();
+            });
+        }
+
+        private void toggleFlatViewToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (!FlatViewEnabled.ContainsKey(SelectedTreeView)) FlatViewEnabled[SelectedTreeView] = false;
+            FlatViewEnabled[SelectedTreeView] = !FlatViewEnabled[SelectedTreeView];
+            RefreshTreeView(SelectedTreeView);
+        }
+
+        private void applyFilterToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            UAGUtils.InvokeUI(() =>
+            {
+                TextPrompt replacementPrompt = new TextPrompt()
+                {
+                    DisplayText = "Enter a string to search for (or empty to remove):",
+                    Text = this.Text,
+                    AllowEmptyText = true
+                };
+
+                replacementPrompt.StartPosition = FormStartPosition.CenterParent;
+                replacementPrompt.PrefilledText = string.Empty;
+
+                string filter = null;
+                if (replacementPrompt.ShowDialog(ParentForm) == DialogResult.OK)
+                {
+                    filter = replacementPrompt.OutputText;
+                }
+
+                replacementPrompt.Dispose();
+
+                if (filter != null && loadTreeView != null)
+                {
+                    this.Filter[loadTreeView] = filter;
+                    RefreshTreeView(loadTreeView);
+                }
+            });
+        }
+
+        private void setRetocCommandLineParametersToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            UAGUtils.InvokeUI(() =>
+            {
+                TextPrompt replacementPrompt = new TextPrompt()
+                {
+                    DisplayText = "Extra retoc command line parameters:",
+                    Text = this.Text,
+                    AllowEmptyText = true
+                };
+
+                replacementPrompt.StartPosition = FormStartPosition.CenterParent;
+                replacementPrompt.PrefilledText = RetocExtraCommands;
+
+                if (replacementPrompt.ShowDialog(ParentForm) == DialogResult.OK)
+                {
+                    RetocExtraCommands = replacementPrompt.OutputText;
+                }
+
+                replacementPrompt.Dispose();
             });
         }
     }
@@ -909,11 +1089,13 @@ namespace UAssetGUI
     {
         public FileContainerForm ParentForm;
         public IDictionary<string, DirectoryTreeItem> RootNodes;
+        public IDictionary<string, DirectoryTreeItem> RootNodesFlat;
         public IDictionary<string, DirectoryTreeItem> PackagePathToNode;
 
         public DirectoryTree(FileContainerForm parentForm)
         {
             RootNodes = new Dictionary<string, DirectoryTreeItem>();
+            RootNodesFlat = new Dictionary<string, DirectoryTreeItem>();
             PackagePathToNode = new Dictionary<string, DirectoryTreeItem>();
             ParentForm = parentForm;
         }
@@ -921,8 +1103,10 @@ namespace UAssetGUI
         public DirectoryTree(FileContainerForm parentForm, string[] paths, string[] fixedAssetsOnDisk = null, string prefix = null)
         {
             RootNodes = new Dictionary<string, DirectoryTreeItem>();
+            RootNodesFlat = new Dictionary<string, DirectoryTreeItem>();
             PackagePathToNode = new Dictionary<string, DirectoryTreeItem>();
             ParentForm = parentForm;
+
             if (fixedAssetsOnDisk != null && fixedAssetsOnDisk.Length == paths.Length)
             {
                 for (int i = 0; i < paths.Length; i++) this.CreateNode(paths[i], fixedAssetsOnDisk[i], prefix);
@@ -1019,6 +1203,8 @@ namespace UAssetGUI
                 }
             }
 
+            RootNodesFlat[currentItem.FullPath.Replace('\\', '/').Replace(Path.DirectorySeparatorChar, '/')] = currentItem;
+
             // todo, this algorithm needs to be fixed for plugins
             // Engine/Plugins/Animation/ControlRig/Content/Controls/ControlRigGizmoMaterial.uasset => /ControlRig/Controls/ControlRigGizmoMaterial
             string packageName = Path.ChangeExtension(currentItem.FullPath, null).Replace('\\', '/').Replace(Path.DirectorySeparatorChar, '/').Replace("Engine/Content/", "Engine/");
@@ -1110,7 +1296,7 @@ namespace UAssetGUI
                 case InteropType.Retoc:
                     string targetPath = FullPath.Substring(Prefix?.Length ?? 0);
                     string origPathPrefix = Path.Combine(FileContainerForm.RetocTempPath, "RetocFiles");
-                    bool retocSuccess = FileContainerForm.SendCommandToRetoc($"to-legacy --filter \"{targetPath}\" \"{Path.GetDirectoryName(ParentForm.CurrentContainerPath)}\" \"{origPathPrefix}\"", out _, out _);
+                    bool retocSuccess = FileContainerForm.SendCommandToRetoc($"{FileContainerForm.RetocExtraCommands ?? string.Empty} to-legacy --filter \"{targetPath}\" \"{Path.GetDirectoryName(ParentForm.CurrentContainerPath)}\" \"{origPathPrefix}\"", out _, out _);
                     if (!retocSuccess) return null;
 
                     string origPath1 = Path.Combine(origPathPrefix, targetPath);
@@ -1192,15 +1378,13 @@ namespace UAssetGUI
         {
             if (FixedPathOnDisk == null) return;
 
-            try
+            bool success = UAGUtils.DeleteFileQuick(FixedPathOnDisk);
+            UAGUtils.DeleteFileQuick(Path.ChangeExtension(FixedPathOnDisk, ".uexp"));
+            UAGUtils.DeleteFileQuick(Path.ChangeExtension(FixedPathOnDisk, ".ubulk"));
+            
+            if (!success)
             {
-                UAGUtils.DeleteFileQuick(FixedPathOnDisk);
-                UAGUtils.DeleteFileQuick(Path.ChangeExtension(FixedPathOnDisk, ".uexp"));
-                UAGUtils.DeleteFileQuick(Path.ChangeExtension(FixedPathOnDisk, ".ubulk"));
-            }
-            catch (UnauthorizedAccessException)
-            {
-                Directory.Delete(FixedPathOnDisk, true);
+                UAGUtils.DeleteDirectoryQuick(FixedPathOnDisk, true);
             }
 
             FixedPathOnDisk = null;

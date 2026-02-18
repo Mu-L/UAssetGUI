@@ -209,6 +209,21 @@ namespace UAssetGUI
             }
         }
 
+        public static bool CopyFileQuick(string source, string dest, bool overwrite)
+        {
+            try
+            {
+                if (!File.Exists(source)) return false;
+                if (!overwrite && File.Exists(dest)) return false;
+                File.Copy(source, dest, overwrite);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         public static void OpenURL(string url)
         {
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });

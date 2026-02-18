@@ -10,6 +10,7 @@ namespace UAssetGUI
         public string DisplayText = null;
         public string OutputText = null;
         public string PrefilledText = null;
+        public bool AllowEmptyText = false;
 
         public TextPrompt()
         {
@@ -39,7 +40,7 @@ namespace UAssetGUI
 
         private void RunOKButton()
         {
-            if (gamePathBox.Text != null && gamePathBox.Text.Length > 0)
+            if (AllowEmptyText || (gamePathBox.Text != null && gamePathBox.Text.Length > 0))
             {
                 OutputText = gamePathBox.Text;
                 this.DialogResult = DialogResult.OK;

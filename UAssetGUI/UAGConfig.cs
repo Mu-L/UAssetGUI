@@ -30,6 +30,7 @@ namespace UAssetGUI
         public int CustomSerializationFlags;
         public bool EnableBakJson;
         public bool AllowUntrustedScripts;
+        public string RetocExtraCommands;
 
         public UAGConfigData()
         {
@@ -51,6 +52,7 @@ namespace UAssetGUI
             CustomSerializationFlags = 0;
             EnableBakJson = false;
             AllowUntrustedScripts = false;
+            RetocExtraCommands = string.Empty;
         }
     }
 
@@ -137,9 +139,9 @@ namespace UAssetGUI
 
             UAGUtils.DeleteDirectoryQuick(finalPath, true); // if we turn a directory into a file, try and get rid of the directory
 
-            File.Copy(outputPath, finalPath, true);
-            try { File.Copy(Path.ChangeExtension(outputPath, ".uexp"), Path.ChangeExtension(finalPath, ".uexp"), true); } catch { }
-            try { File.Copy(Path.ChangeExtension(outputPath, ".ubulk"), Path.ChangeExtension(finalPath, ".ubulk"), true); } catch { }
+            UAGUtils.CopyFileQuick(outputPath, finalPath, true);
+            UAGUtils.CopyFileQuick(Path.ChangeExtension(outputPath, ".uexp"), Path.ChangeExtension(finalPath, ".uexp"), true);
+            UAGUtils.CopyFileQuick(Path.ChangeExtension(outputPath, ".ubulk"), Path.ChangeExtension(finalPath, ".ubulk"), true);
             UAGUtils.DeleteFileQuick(outputPath);
             UAGUtils.DeleteFileQuick(Path.ChangeExtension(outputPath, ".uexp"));
             UAGUtils.DeleteFileQuick(Path.ChangeExtension(outputPath, ".ubulk"));

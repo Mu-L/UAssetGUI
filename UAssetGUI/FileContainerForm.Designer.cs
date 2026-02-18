@@ -40,6 +40,7 @@ namespace UAssetGUI
             loadToolStripMenuItem = new ToolStripMenuItem();
             saveToolStripMenuItem = new ToolStripMenuItem();
             stageFromDiskToolStripMenuItem = new ToolStripMenuItem();
+            stageFromDiskToPathToolStripMenuItem = new ToolStripMenuItem();
             editToolStripMenuItem = new ToolStripMenuItem();
             cutToolStripMenuItem = new ToolStripMenuItem();
             copyToolStripMenuItem = new ToolStripMenuItem();
@@ -48,11 +49,13 @@ namespace UAssetGUI
             viewToolStripMenuItem = new ToolStripMenuItem();
             expandAllToolStripMenuItem = new ToolStripMenuItem();
             collapseAllToolStripMenuItem = new ToolStripMenuItem();
+            toggleFlatViewToolStripMenuItem = new ToolStripMenuItem();
+            applyFilterToolStripMenuItem = new ToolStripMenuItem();
             refreshToolStripMenuItem = new ToolStripMenuItem();
             utilsToolStripMenuItem = new ToolStripMenuItem();
             extractAllToolStripMenuItem = new ToolStripMenuItem();
             extractAllBackgroundWorker = new System.ComponentModel.BackgroundWorker();
-            stageFromDiskToPathToolStripMenuItem = new ToolStripMenuItem();
+            setRetocCommandLineParametersToolStripMenuItem = new ToolStripMenuItem();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -178,6 +181,13 @@ namespace UAssetGUI
             stageFromDiskToolStripMenuItem.Text = "Stage from disk...";
             stageFromDiskToolStripMenuItem.Click += stageFromDiskToolStripMenuItem_Click;
             // 
+            // stageFromDiskToPathToolStripMenuItem
+            // 
+            stageFromDiskToPathToolStripMenuItem.Name = "stageFromDiskToPathToolStripMenuItem";
+            stageFromDiskToPathToolStripMenuItem.Size = new System.Drawing.Size(206, 22);
+            stageFromDiskToPathToolStripMenuItem.Text = "Stage from disk to path...";
+            stageFromDiskToPathToolStripMenuItem.Click += stageFromDiskToPathToolStripMenuItem_Click;
+            // 
             // editToolStripMenuItem
             // 
             editToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { cutToolStripMenuItem, copyToolStripMenuItem, pasteToolStripMenuItem, deleteToolStripMenuItem });
@@ -188,34 +198,34 @@ namespace UAssetGUI
             // cutToolStripMenuItem
             // 
             cutToolStripMenuItem.Name = "cutToolStripMenuItem";
-            cutToolStripMenuItem.Size = new System.Drawing.Size(107, 22);
+            cutToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             cutToolStripMenuItem.Text = "Cut";
             cutToolStripMenuItem.Click += cutToolStripMenuItem_Click;
             // 
             // copyToolStripMenuItem
             // 
             copyToolStripMenuItem.Name = "copyToolStripMenuItem";
-            copyToolStripMenuItem.Size = new System.Drawing.Size(107, 22);
+            copyToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             copyToolStripMenuItem.Text = "Copy";
             copyToolStripMenuItem.Click += copyToolStripMenuItem_Click;
             // 
             // pasteToolStripMenuItem
             // 
             pasteToolStripMenuItem.Name = "pasteToolStripMenuItem";
-            pasteToolStripMenuItem.Size = new System.Drawing.Size(107, 22);
+            pasteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             pasteToolStripMenuItem.Text = "Paste";
             pasteToolStripMenuItem.Click += pasteToolStripMenuItem_Click;
             // 
             // deleteToolStripMenuItem
             // 
             deleteToolStripMenuItem.Name = "deleteToolStripMenuItem";
-            deleteToolStripMenuItem.Size = new System.Drawing.Size(107, 22);
+            deleteToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             deleteToolStripMenuItem.Text = "Delete";
             deleteToolStripMenuItem.Click += deleteToolStripMenuItem_Click;
             // 
             // viewToolStripMenuItem
             // 
-            viewToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { expandAllToolStripMenuItem, collapseAllToolStripMenuItem, refreshToolStripMenuItem });
+            viewToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { expandAllToolStripMenuItem, collapseAllToolStripMenuItem, toggleFlatViewToolStripMenuItem, applyFilterToolStripMenuItem, refreshToolStripMenuItem });
             viewToolStripMenuItem.Name = "viewToolStripMenuItem";
             viewToolStripMenuItem.Size = new System.Drawing.Size(44, 20);
             viewToolStripMenuItem.Text = "View";
@@ -224,7 +234,7 @@ namespace UAssetGUI
             // 
             expandAllToolStripMenuItem.Name = "expandAllToolStripMenuItem";
             expandAllToolStripMenuItem.ShortcutKeys = Keys.Control | Keys.M;
-            expandAllToolStripMenuItem.Size = new System.Drawing.Size(176, 22);
+            expandAllToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             expandAllToolStripMenuItem.Text = "Expand All";
             expandAllToolStripMenuItem.Click += expandAllToolStripMenuItem_Click;
             // 
@@ -232,21 +242,35 @@ namespace UAssetGUI
             // 
             collapseAllToolStripMenuItem.Name = "collapseAllToolStripMenuItem";
             collapseAllToolStripMenuItem.ShortcutKeys = Keys.Control | Keys.L;
-            collapseAllToolStripMenuItem.Size = new System.Drawing.Size(176, 22);
+            collapseAllToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             collapseAllToolStripMenuItem.Text = "Collapse All";
             collapseAllToolStripMenuItem.Click += collapseAllToolStripMenuItem_Click;
+            // 
+            // toggleFlatViewToolStripMenuItem
+            // 
+            toggleFlatViewToolStripMenuItem.Name = "toggleFlatViewToolStripMenuItem";
+            toggleFlatViewToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            toggleFlatViewToolStripMenuItem.Text = "Toggle flat view";
+            toggleFlatViewToolStripMenuItem.Click += toggleFlatViewToolStripMenuItem_Click;
+            // 
+            // applyFilterToolStripMenuItem
+            // 
+            applyFilterToolStripMenuItem.Name = "applyFilterToolStripMenuItem";
+            applyFilterToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
+            applyFilterToolStripMenuItem.Text = "Apply filter...";
+            applyFilterToolStripMenuItem.Click += applyFilterToolStripMenuItem_Click;
             // 
             // refreshToolStripMenuItem
             // 
             refreshToolStripMenuItem.Name = "refreshToolStripMenuItem";
             refreshToolStripMenuItem.ShortcutKeys = Keys.F5;
-            refreshToolStripMenuItem.Size = new System.Drawing.Size(176, 22);
+            refreshToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             refreshToolStripMenuItem.Text = "Refresh";
             refreshToolStripMenuItem.Click += refreshToolStripMenuItem_Click;
             // 
             // utilsToolStripMenuItem
             // 
-            utilsToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { extractAllToolStripMenuItem });
+            utilsToolStripMenuItem.DropDownItems.AddRange(new ToolStripItem[] { extractAllToolStripMenuItem, setRetocCommandLineParametersToolStripMenuItem });
             utilsToolStripMenuItem.Name = "utilsToolStripMenuItem";
             utilsToolStripMenuItem.Size = new System.Drawing.Size(42, 20);
             utilsToolStripMenuItem.Text = "Utils";
@@ -254,7 +278,7 @@ namespace UAssetGUI
             // extractAllToolStripMenuItem
             // 
             extractAllToolStripMenuItem.Name = "extractAllToolStripMenuItem";
-            extractAllToolStripMenuItem.Size = new System.Drawing.Size(134, 22);
+            extractAllToolStripMenuItem.Size = new System.Drawing.Size(271, 22);
             extractAllToolStripMenuItem.Text = "Extract all...";
             extractAllToolStripMenuItem.Click += extractAllToolStripMenuItem_Click;
             // 
@@ -266,12 +290,12 @@ namespace UAssetGUI
             extractAllBackgroundWorker.ProgressChanged += extractAllBackgroundWorker_ProgressChanged;
             extractAllBackgroundWorker.RunWorkerCompleted += extractAllBackgroundWorker_RunWorkerCompleted;
             // 
-            // stageFromDiskToPathToolStripMenuItem
+            // setRetocCommandLineParametersToolStripMenuItem
             // 
-            stageFromDiskToPathToolStripMenuItem.Name = "stageFromDiskToPathToolStripMenuItem";
-            stageFromDiskToPathToolStripMenuItem.Size = new System.Drawing.Size(206, 22);
-            stageFromDiskToPathToolStripMenuItem.Text = "Stage from disk to path...";
-            stageFromDiskToPathToolStripMenuItem.Click += stageFromDiskToPathToolStripMenuItem_Click;
+            setRetocCommandLineParametersToolStripMenuItem.Name = "setRetocCommandLineParametersToolStripMenuItem";
+            setRetocCommandLineParametersToolStripMenuItem.Size = new System.Drawing.Size(271, 22);
+            setRetocCommandLineParametersToolStripMenuItem.Text = "Set extra retoc command line parameters...";
+            setRetocCommandLineParametersToolStripMenuItem.Click += setRetocCommandLineParametersToolStripMenuItem_Click;
             // 
             // FileContainerForm
             // 
@@ -320,5 +344,8 @@ namespace UAssetGUI
         private ToolStripMenuItem extractAllToolStripMenuItem;
         internal System.ComponentModel.BackgroundWorker extractAllBackgroundWorker;
         private ToolStripMenuItem stageFromDiskToPathToolStripMenuItem;
+        private ToolStripMenuItem toggleFlatViewToolStripMenuItem;
+        private ToolStripMenuItem applyFilterToolStripMenuItem;
+        private ToolStripMenuItem setRetocCommandLineParametersToolStripMenuItem;
     }
 }
