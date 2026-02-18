@@ -46,7 +46,7 @@ namespace UAssetGUI
                     currentStreamHash = Array.Empty<byte>();
                 }
 
-                if (currentStreamHash.Length > 0 && newStreamHash.Length > 0 && currentStreamHash.SequenceEqual(newStreamHash))
+                if (currentStreamHash.Length > 0 && newStreamHash.Length > 0 && currentStreamHash.SequenceEqual(newStreamHash) && File.Exists(outPath))
                 {
                     // hashes are equal, OK to skip decompress/write routine
                     return outPath;
